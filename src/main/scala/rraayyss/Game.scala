@@ -1,3 +1,5 @@
+package rraayyss
+
 import drawing.Drawing
 import drawing.core.SimpleDrawable
 import utils.math.Scalar
@@ -6,6 +8,11 @@ import utils.math.planar.V2
 import java.awt.Graphics2D
 import java.awt.event.{KeyEvent, KeyListener}
 
+case class GameConfig(
+
+                     )
+
+
 class Game(
             var config: GameConfig = GameConfig(),
             var position: V2 = V2(3, 3),
@@ -13,10 +20,10 @@ class Game(
             var map: WorldMap
           ) extends SimpleDrawable {
   Drawing.addKeyBinding(KeyEvent.VK_A, {
-    lookDirection = lookDirection.rotate(0.1)
+    lookDirection = lookDirection.rotate(-0.1)
   })
   Drawing.addKeyBinding(KeyEvent.VK_D, {
-    lookDirection = lookDirection.rotate(-0.1)
+    lookDirection = lookDirection.rotate(0.1)
   })
 
   Drawing.addKeyBinding(KeyEvent.VK_W, {

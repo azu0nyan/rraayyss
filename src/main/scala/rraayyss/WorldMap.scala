@@ -1,3 +1,4 @@
+package rraayyss
 import utils.heightmap.PerlinNoise
 import utils.math.planar.V2
 
@@ -22,16 +23,18 @@ case class RayCastResult(
                           hitWall: Wall,
                           distance: Double
                         )
+object WorldMap{
+  def fromPerlinNoise(size: V2): WorldMap = {
+    def cFunc(x: Int)(y: Int): Cell = {
+      val n = PerlinNoise.noise(x / 3f, y / 3f, 1f)
+      if (n > 0.5) Wall(randomColor(x * 11231232 + y * 1111111))
+      else Empty
+    }
 
-def fromPerlinNoise(size: V2): WorldMap = {
-  def cFunc(x: Int)(y: Int): Cell = {
-    val n = PerlinNoise.noise(x / 3f, y / 3f, 1f)
-    if (n > 0.5) Wall(randomColor(x * 11231232 + y * 1111111))
-    else Empty
-  }
-
-  WorldMap(xSize = size.xInt, ySize = size.yInt, cell = cFunc)
+    WorldMap(xSize = size.xInt, ySize = size.yInt, cell = cFunc)
+  }  
 }
+
 
 
 case class WorldMap(
@@ -89,3 +92,4 @@ case class WorldMap(
     posW.map(pos => RayCastResult(pos._1, pos._2, pos._1.distance(from)))
   }
 }
+
