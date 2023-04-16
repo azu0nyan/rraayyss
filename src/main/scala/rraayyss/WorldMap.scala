@@ -5,22 +5,16 @@ import utils.math.planar.V2
 import java.awt.Color
 import scala.util.Random
 
-case class Col(r: Int, g: Int, b: Int) {
-  def toColor: Color = new Color(r, g, b)
-}
 
-def randomColor(seed: Int): Col = {
-  val r = new Random(seed)
-  Col(r.nextInt(256), r.nextInt(256), r.nextInt(256))
-}
 
 sealed trait Cell
-case object Empty extends Cell
-case class Wall(c: Col) extends Cell
+case object EmptyCell extends Cell
+case class Floor(c: Col, tex: Option[String] = None) extends Cell
+case class Wall(c: Col, tex: Option[String] = None) extends Cell
 
 case class RayCastResult(
                           hitPos: V2,
-                          hitWall: Cell,
+                          hitCell: Cell,
                           distance: Double
                         )
 object WorldMap{
@@ -28,7 +22,7 @@ object WorldMap{
     def cFunc(x: Int)(y: Int): Cell = {
       val n = PerlinNoise.noise(x / 3f, y / 3f, 1f)
       if (x == 0 || y == 0 || x == (size.x.toInt - 1) || y == (size.y.toInt - 1) || n > 0.5) Wall(randomColor(x * 11231232 + y * 1111111))
-      else Empty
+      else EmptyCell
     }
 
     WorldMap(xSize = size.xInt, ySize = size.yInt, cell = cFunc)
@@ -64,9 +58,9 @@ case class WorldMap(
     override def hasNext: Boolean = true
     override def next(): V2 = {
       val curPos = from + dir * t
-      var (tx, ty) = cellPos(curPos.x, curPos.y)
-      var inX = curPos.x - tx * cellSize
-      var inY = curPos.y - ty * cellSize
+      val (tx, ty) = cellPos(curPos.x, curPos.y)
+      val inX = curPos.x - tx * cellSize
+      val inY = curPos.y - ty * cellSize
 
       val dtX =
         if (dir.x > 0) (cellSize - inX) / dir.x
@@ -92,7 +86,7 @@ case class WorldMap(
   }
   def rayCastFirstWall(from: V2, dir: V2, maxLength: Double): Option[RayCastResult] = {
     val posW = iterateOverGrid(from, dir).takeWhile(_.distance(from) <= maxLength).collect(pos => cellAt(pos.x, pos.y) match
-      case Some(w@Wall(_)) => (pos, w)
+      case Some(w: Wall) => (pos, w)
     ).toSeq.headOption
 
     posW.map(pos => RayCastResult(pos._1, pos._2, pos._1.distance(from)))

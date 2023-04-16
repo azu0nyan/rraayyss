@@ -56,43 +56,57 @@ class Render(
       def wTop(dist: Double): Int = (height / 2d - wHeight(dist) / 2d).toInt
 
       val rc = game.map.rayCastAllTiles(game.position, dir, params.maxDist)
-      val tId = rc.indexWhere(_.hitWall.isInstanceOf[Wall])
-      if(rc.size > 100) {
-        println(rc.size)
-        println(game.position)
-        println(dir)
-        println(params.maxDist)
-        println(rc)
-      }
+      val tId = rc.indexWhere(_.hitCell.isInstanceOf[Wall])
+//      println(rc.size + " " + tId + " " + rc.count(_.hitCell.isInstanceOf[Wall]) +" " + rc.count(_.hitCell.isInstanceOf[EmptyCell.type ]) + " " + " " + rc.count(_.hitCell.isInstanceOf[Floor])  )
+      //      if(rc.size > 100) {
+      //        println(rc.size)
+      //        println(game.position)
+      //        println(dir)
+      //        println(params.maxDist)
+      //        println(rc)
+      //      }
       if (tId >= 1) {
-        //floors
         for (Seq(f, s) <- rc.take(tId + 1).sliding(2)) {
           val bot = s.hitPos
           val top = f.hitPos
-          def cFunc(pct: Double): Int = {
-            val p = bot + (top - bot) * pct
-            val u = p.x - p.x.floor
-            val v = p.y - p.y.floor
-            TextureLibrary.colorAt("billy_pixel_1.png", u, v)
-          }
-          fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFunc)
-        }
-        //ceils
-        for (Seq(f, s) <- rc.take(tId + 1).sliding(2)) {
-          val bot = f.hitPos
-          val top = s.hitPos
-          def cFunc(pct: Double): Int = {
-            val p = bot + (top - bot) * pct
-            val u = p.x - p.x.floor
-            val v = p.y - p.y.floor
-            TextureLibrary.colorAt("billy_pixel_1.png", u, v)
-          }
-          fillVertical(bi, x, wTop(f.distance), wTop(s.distance), cFunc)
+          f.hitCell match
+            case Floor(c, tex) =>
+              def cFuncFloor(pct: Double): Int = tex match
+                case Some(texName) =>
+                  val p = bot + (top - bot) * pct
+                  val u = p.x - p.x.floor
+                  val v = p.y - p.y.floor
+                  val cAt = TextureLibrary.colorAt(texName, u, v)
+                  Col.mutiply(cAt, c)
+                case None =>
+                  c.toColor.getRGB
+
+              fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFuncFloor)
+
+              def cFuncCeil(pct: Double): Int = tex match
+                case Some(texName) =>
+                  val p = bot + (top - bot) * pct
+                  val u = p.x - p.x.floor
+                  val v = p.y - p.y.floor
+                  val cAt = TextureLibrary.colorAt(texName, u, v)
+                  Col.mutiply(cAt, c)
+                case None =>
+                  c.toColor.getRGB
+              fillVertical(bi, x, wTop(f.distance), wTop(s.distance), cFuncCeil)
+
+            case _ =>
         }
       }
       if (tId >= 0) {
+        val w = rc(tId).hitCell.asInstanceOf[Wall]
         val dPos = rc(tId).hitPos.x - rc(tId).hitPos.x.floor + rc(tId).hitPos.y + rc(tId).hitPos.y.floor
-        def cFunc(y: Double): Int = TextureLibrary.colorAt("billy_pixel_1.png", dPos, y)
+        def cFunc(y: Double): Int =
+          w.tex match
+            case Some(value) =>
+              val cAt = TextureLibrary.colorAt(value, dPos, y)
+              Col.mutiply(cAt, w.c)
+            case None => w.c.toColor.getRGB
+
         fillVertical(bi, x, wTop(rc(tId).distance), wBot(rc(tId).distance), cFunc)
       }
 
@@ -163,8 +177,9 @@ class Render(
     for ((x, y) <- game.map.indices) {
       val c = game.map.cell(x)(y)
       c match
-        case Empty =>
-        case Wall(c) => drawCell(x, y, c.toColor)
+        case EmptyCell =>
+        case Wall(c, _) => drawCell(x, y, c.toColor)
+        case Floor(c, _) => drawCell(x, y, c.toColor)
     }
 
 
