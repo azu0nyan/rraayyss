@@ -27,14 +27,13 @@ object TextureLibrary {
       case Some(value) => Some(value)
       case None => loadTexture(name)
   }
-  
+
   def colorAt(tex: BufferedImage, u: Double, v: Double): Int = {
-    val x = ((u % 1d + 1d) %1d) * tex.getWidth toInt 
-    val y = (1d - ((v % 1d + 1d) %1d)) * tex.getHeight toInt
-    
+    val x = (((u % 1d + 1d) %1d) * tex.getWidth).toInt
+    val y = (((v % 1d + 1d) % 1d) * tex.getHeight).toInt
     tex.getRGB(x, y)
-  } 
-  
+  }
+
   def colorAt(name: String, u: Double, v: Double): Int =
     colorAt(getTexture(name).get, u, v)
 }

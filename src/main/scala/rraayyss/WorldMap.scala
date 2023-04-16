@@ -20,19 +20,19 @@ case class Wall(c: Col) extends Cell
 
 case class RayCastResult(
                           hitPos: V2,
-                          hitWall: Wall,
+                          hitWall: Cell,
                           distance: Double
                         )
 object WorldMap{
   def fromPerlinNoise(size: V2): WorldMap = {
     def cFunc(x: Int)(y: Int): Cell = {
       val n = PerlinNoise.noise(x / 3f, y / 3f, 1f)
-      if (n > 0.5) Wall(randomColor(x * 11231232 + y * 1111111))
+      if (x == 0 || y == 0 || x == (size.x.toInt - 1) || y == (size.y.toInt - 1) || n > 0.5) Wall(randomColor(x * 11231232 + y * 1111111))
       else Empty
     }
 
     WorldMap(xSize = size.xInt, ySize = size.yInt, cell = cFunc)
-  }  
+  }
 }
 
 
@@ -41,12 +41,13 @@ case class WorldMap(
                      xSize: Int = 16,
                      ySize: Int = 16,
                      cellSize: Int = 1,
-                     cell: Int => Int => Cell /*=
-                     x => y =>
-                       if (new Random(x * 11231232 + y * 1111111).nextInt(100) == 0)
-                         Wall(randomColor(x * 11231232 + y * 1111111))
-                       else Empty*/
+                     cell: Int => Int => Cell
                    ) {
+
+  var maxX = xSize * cellSize
+  var maxY = ySize * cellSize
+
+  def contains(pos: V2): Boolean = pos.x >= 0 && pos.y > 0 && pos.x < maxX && pos.y < maxY
 
   def indices: Iterator[(Int, Int)] = for (x <- (0 until xSize).iterator; y <- (0 until ySize).iterator) yield (x, y)
 
@@ -57,7 +58,7 @@ case class WorldMap(
     Option.when(xPos < xSize && xPos >= 0 && yPos < ySize && yPos >= 0)(cell(xPos)(yPos))
   }
 
-  def iterateOverGrid(from: V2, dir: V2, eps: Double = 0.000001d): Iterator[V2] = new Iterator[V2] {
+  def iterateOverGrid(from: V2, dir: V2, eps: Double = 0.0001d): Iterator[V2] = Seq(from).iterator ++ new Iterator[V2] {
     var t = 0d
 
     override def hasNext: Boolean = true
@@ -84,7 +85,12 @@ case class WorldMap(
   }
 
 
-  def rayCast(from: V2, dir: V2, maxLength: Double): Option[RayCastResult] = {
+
+
+  def rayCastAllTiles(from: V2, dir: V2, maxLength: Double): Seq[RayCastResult] = {
+    iterateOverGrid(from, dir).takeWhile(_.distance(from) <= maxLength).takeWhile(contains).map{case v@V2(x, y) => RayCastResult(v, cellAt(x, y).get, v.distance(from))}.toSeq
+  }
+  def rayCastFirstWall(from: V2, dir: V2, maxLength: Double): Option[RayCastResult] = {
     val posW = iterateOverGrid(from, dir).takeWhile(_.distance(from) <= maxLength).collect(pos => cellAt(pos.x, pos.y) match
       case Some(w@Wall(_)) => (pos, w)
     ).toSeq.headOption

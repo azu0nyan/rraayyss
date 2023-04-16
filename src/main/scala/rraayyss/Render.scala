@@ -34,7 +34,6 @@ class Render(
 
 
   def fillVertical(in: BufferedImage, x: Int, minY: Int, maxY: Int, colorFromFract: Double => Int = c => Color.BLACK.getRGB): Unit = {
-    println(x + " " + " " + minY + " " + maxY)
     for (y <- math.max(0, minY) until math.min(maxY, in.getHeight)) {
       val pct = (y - minY).toDouble / (maxY - minY).toDouble
       val col = colorFromFract(pct)
@@ -43,27 +42,72 @@ class Render(
   }
 
   def renderGameWorld(width: Int, height: Int): BufferedImage = {
+
     val bi = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     val gr = bi.getGraphics
     gr.setColor(Color.RED)
     gr.fillRect(0, 0, width, height)
+
     for (x <- 0 until width) {
       val dirAngleOfset = -params.fov / 2d + x.toDouble / width * params.fov
       val dir = game.lookDirection.rotate(dirAngleOfset)
-      val rc = game.map.rayCast(game.position, dir, params.maxDist)
-      rc match
-        case Some(RayCastResult(hitPos, hitWall, distance)) =>
-          val wHeight = params.size.y / (distance * math.cos(dirAngleOfset))
-          fillVertical(bi, x, (height / 2d - wHeight / 2d).toInt, (height / 2d + wHeight / 2d).toInt)
-        case None =>
-    0  //          g.setStroke(new BasicStroke(1))
-      //          g.setColor(params.bgColor)
-      //          g.drawLine(x, 0, x, 1080)
+      def wHeight(dist: Double): Double = params.size.y / (dist * math.cos(dirAngleOfset))
+      def wBot(dist: Double): Int = (height / 2d + wHeight(dist) / 2d).toInt
+      def wTop(dist: Double): Int = (height / 2d - wHeight(dist) / 2d).toInt
 
+      val rc = game.map.rayCastAllTiles(game.position, dir, params.maxDist)
+      val tId = rc.indexWhere(_.hitWall.isInstanceOf[Wall])
+      if(rc.size > 100) {
+        println(rc.size)
+        println(game.position)
+        println(dir)
+        println(params.maxDist)
+        println(rc)
+      }
+      if (tId >= 1) {
+        //floors
+        for (Seq(f, s) <- rc.take(tId + 1).sliding(2)) {
+          val bot = s.hitPos
+          val top = f.hitPos
+          def cFunc(pct: Double): Int = {
+            val p = bot + (top - bot) * pct
+            val u = p.x - p.x.floor
+            val v = p.y - p.y.floor
+            TextureLibrary.colorAt("billy_pixel_1.png", u, v)
+          }
+          fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFunc)
+        }
+        //ceils
+        for (Seq(f, s) <- rc.take(tId + 1).sliding(2)) {
+          val bot = f.hitPos
+          val top = s.hitPos
+          def cFunc(pct: Double): Int = {
+            val p = bot + (top - bot) * pct
+            val u = p.x - p.x.floor
+            val v = p.y - p.y.floor
+            TextureLibrary.colorAt("billy_pixel_1.png", u, v)
+          }
+          fillVertical(bi, x, wTop(f.distance), wTop(s.distance), cFunc)
+        }
+      }
+      if (tId >= 0) {
+        val dPos = rc(tId).hitPos.x - rc(tId).hitPos.x.floor + rc(tId).hitPos.y + rc(tId).hitPos.y.floor
+        def cFunc(y: Double): Int = TextureLibrary.colorAt("billy_pixel_1.png", dPos, y)
+        fillVertical(bi, x, wTop(rc(tId).distance), wBot(rc(tId).distance), cFunc)
+      }
 
+      /*Single wall rendering*/
+      //      val rc = game.map.rayCastFirstWall(game.position, dir, params.maxDist)
+      //      rc match
+      //        case Some(RayCastResult(hitPos, hitWall, distance)) =>
+      //          val dPos = hitPos.x - hitPos.x.floor + hitPos.y + hitPos.y.floor
+      //          def cFunc(y: Double): Int = TextureLibrary.colorAt("billy_pixel_1.png", dPos, y)
+      //          val wHeight = params.size.y / (distance * math.cos(dirAngleOfset))
+      //          fillVertical(bi, x, (height / 2d - wHeight / 2d).toInt, (height / 2d + wHeight / 2d).toInt, cFunc)
+      //        case None =>
+      //
     }
     bi
-
   }
 
   def renderGame(g: Graphics2D, lt: V2, size: V2): Unit = {
@@ -142,7 +186,7 @@ class Render(
     g.drawLine(fx, fy, trx, try_)
 
 
-    val rc = game.map.rayCast(game.position, game.lookDirection, params.maxDist)
+    val rc = game.map.rayCastFirstWall(game.position, game.lookDirection, params.maxDist)
     for (RayCastResult(hit, w, dist) <- rc) {
       g.setColor(Color.RED)
       val (tx, ty) = toMapPos(hit)
