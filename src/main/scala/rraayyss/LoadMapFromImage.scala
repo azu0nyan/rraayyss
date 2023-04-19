@@ -6,34 +6,30 @@ import java.nio.file.Path
 import javax.imageio.ImageIO
 
 object LoadMapFromImage {
-  def load(path: String): WorldMap = {
-    val file = new File(path + "/wall_stone_32.png")
-    val walls = ImageIO.read(file)
-    val floors = ImageIO.read(new File(path + "/floor_techno_32.png"))
+  def load(path: String, sizeX: Int, sizeY: Int): WorldMap = {
+    val files = new File(path).listFiles().sortBy(_.getName)
 
-    val cells: Array[Array[Cell]] = Array.fill[Cell](walls.getWidth, walls.getHeight)(EmptyCell)
+    val cells: Array[Array[Cell]] = Array.fill[Cell](sizeX, sizeY)(Cell())
 
-    for(x <- 0 until floors.getWidth; y <- 0 until floors.getHeight) {
-      val rgb = floors.getRGB(x, y)
-      val c = new Color(rgb, true)
-      if(c.getAlpha > 0){
-//        cells(x)(y) = Floor(Col(c.getRed, c.getGreen, c.getBlue), Some("floor_techno_32.png"))
-        cells(x)(y) = Floor(Col(c.getRed, c.getGreen, c.getBlue), Some("floor_mosaik_32.png"))
+    for {f <- files
+         image = ImageIO.read(f)
+         sprite <- TextureLibrary.getTexture(f.getName)
+         x <- 0 until sizeX
+         y <- 0 until sizeY
+         rgb = image.getRGB(x, y)
+         c = new Color(rgb, true) if c.getAlpha > 0
+         }
+      if (f.getName.startsWith("wall")) {
+        cells(x)(y) = cells(x)(y).copy(wall = Some(TexturedPlane(Col(c.getRed, c.getGreen, c.getBlue), sprite, None)))
+      } else if (f.getName.startsWith("floor")) {
+        cells(x)(y) = cells(x)(y).copy(floor = Some(TexturedPlane(Col(c.getRed, c.getGreen, c.getBlue), sprite, None)))
+      } else if (f.getName.startsWith("ceil")) {
+        cells(x)(y) = cells(x)(y).copy(ceil = Some(TexturedPlane(Col(c.getRed, c.getGreen, c.getBlue), sprite, None)))
       }
-    }
+    println(s"Loaded ${cells.flatten.count(_.wall.nonEmpty)} walls")
+    println(s"Loaded ${cells.flatten.count(_.floor.nonEmpty)} floors")
+    println(s"Loaded ${cells.flatten.count(_.ceil.nonEmpty)} ceils")
 
-    for (x <- 0 until floors.getWidth; y <- 0 until floors.getHeight) {
-      val rgb = walls.getRGB(x, y)
-      val c = new Color(rgb, true)
-      if (c.getAlpha > 0) {
-        cells(x)(y) = Wall(Col(c.getRed, c.getGreen, c.getBlue), Some("wall_stone_32.png"))
-      }
-    }
-
-    println(cells.flatten.count(_.isInstanceOf[EmptyCell.type ]))
-    println(cells.flatten.count(_.isInstanceOf[Floor ]))
-    println(cells.flatten.count(_.isInstanceOf[Wall ]))
-
-    WorldMap(xSize =  walls.getWidth, ySize = walls.getHeight, cellSize = 1, cell = cells.apply)
+    WorldMap(sizeX, sizeY, cellSize = 1, cell = cells.apply)
   }
 }
