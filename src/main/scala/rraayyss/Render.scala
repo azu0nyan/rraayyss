@@ -56,23 +56,29 @@ class Render(
       def wTop(dist: Double): Int = (height / 2d - wHeight(dist) / 2d).toInt
 
       val rc = game.map.rayCastAllTiles(game.position, dir, params.maxDist)
-      val tId = rc.indexWhere(_.hitCell.wall.nonEmpty)
+      val tId = rc.indexWhere(_.hitCell.hasWall)
+
 
       if (tId >= 1) {
         for (Seq(f, s) <- rc.take(tId + 1).sliding(2)) {
           val secondHit = s.hitPos
           val firstHit = f.hitPos
+          val body = firstHit - secondHit
+
           if (f.hitCell.floor.nonEmpty) {
             val floor = f.hitCell.floor.get
             def cFuncFloor(pct: Double): Int = {
-              val p = secondHit + (firstHit - secondHit) * pct
+              val nPct = if(pct < 0.01) 0.01 else if(pct > 0.99) 0.99 else pct //hack to compensate rayCasting offset todo fix
+              val p = secondHit + body * nPct
               val u = p.x - p.x.floor
               val v = p.y - p.y.floor
               val cAt = TextureLibrary.colorAt(floor.texture, u, v)
-              val oAt = floor.overlayTexture match
-                case Some(overlay) => TextureLibrary.colorAt(overlay, u, v)
-                case None => 0
-              Col.multiplyAdd(cAt, oAt, floor.colorMultiplier)
+              val oAt = TextureLibrary.colorAt(floor.overlayTexture, u, v)
+              val col = Col.multiplyAdd(cAt, oAt, floor.colorMultiplier)
+//              if(col == Color.CYAN.getRGB) {
+//                println(s"${pct} ${secondHit} ${firstHit} $cAt $oAt $col")
+//              }
+              col
             }
 
             fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFuncFloor)
@@ -80,13 +86,12 @@ class Render(
           if (f.hitCell.ceil.nonEmpty) {
             val ceil = f.hitCell.ceil.get
             def cFuncCeil(pct: Double): Int = {
-              val p = firstHit + (secondHit - firstHit) * pct
+              val nPct = if(pct < 0.01) 0.01 else if(pct > 0.99) 0.99 else pct //hack to compensate rayCasting offset todo fix
+              val p = firstHit + (secondHit - firstHit) * nPct
               val u = p.x - p.x.floor
               val v = p.y - p.y.floor
               val cAt = TextureLibrary.colorAt(ceil.texture, u, v)
-              val oAt = ceil.overlayTexture match
-                case Some(overlay) => TextureLibrary.colorAt(overlay, u, v)
-                case None => 0
+              val oAt = TextureLibrary.colorAt(ceil.overlayTexture, u, v)
               Col.multiplyAdd(cAt, oAt, ceil.colorMultiplier)
             }
 
@@ -94,18 +99,35 @@ class Render(
           }
         }
       }
-      if (tId >= 0 && rc(tId).hitCell.wall.nonEmpty) {
-        val wall = rc(tId).hitCell.wall.get
-        val dPos = rc(tId).hitPos.x - rc(tId).hitPos.x.floor + rc(tId).hitPos.y + rc(tId).hitPos.y.floor
+      //paint wall
+
+      if (tId >= 0 &&  rc(tId).hitCell.hasWall) {
+        val hitResult = rc(tId)
+        val cell = hitResult.hitCell
+        val eps = 0.0005d
+
+
+        val (cposX, cposY) = game.map.cellPos(hitResult.hitPos.x, hitResult.hitPos.y)
+
+        val wallSide: TexturedPlane =
+          if( hitResult.hitPos.x - cposX  < eps) cell.wallX.get
+          else if (hitResult.hitPos.x - cposX > 1 - eps) cell.wallX1.get
+          else if (hitResult.hitPos.y - cposY  < eps) cell.wallY.get
+          else if (hitResult.hitPos.y - cposY  > 1  -eps) cell.wallY1.get
+          else {
+//            throw new Exception(s"Can't detect side ${hitResult.hitPos.x - cposX} ${hitResult.hitPos.y - cposY}")
+            cell.wallX.get
+          }
+
+
+        val dPos = hitResult.hitPos.x - hitResult.hitPos.x.floor + hitResult.hitPos.y + hitResult.hitPos.y.floor
         def cFunc(y: Double): Int =
-          val cAt = TextureLibrary.colorAt(wall.texture, dPos, y)
-          val oAt = wall.overlayTexture match
-            case Some(overlay) => TextureLibrary.colorAt(overlay, dPos, y)
-            case None => 0
-          Col.multiplyAdd(cAt, oAt, wall.colorMultiplier)
+          val cAt = TextureLibrary.colorAt(wallSide.texture, dPos, y)
+          val oAt = TextureLibrary.colorAt(wallSide.overlayTexture, dPos, y)
+          Col.multiplyAdd(cAt, oAt, wallSide.colorMultiplier)
 
 
-        fillVertical(bi, x, wTop(rc(tId).distance), wBot(rc(tId).distance), cFunc)
+        fillVertical(bi, x, wTop(hitResult.distance), wBot(hitResult.distance), cFunc)
       }
 
     }
@@ -116,30 +138,7 @@ class Render(
     val bi = renderGameWorld(size.xInt, size.yInt)
     g.drawImage(bi, lt.xInt, lt.yInt, null)
   }
-  /*
-    def renderGame(g: Graphics2D, lt: V2, size: V2): Unit = {
-      g.setColor(new Color(122, 20, 200))
-      g.fillRect(lt.xInt, lt.yInt, size.xInt, size.yInt)
 
-      for (dx <- 0 until size.xInt) {
-        val x = lt.xInt + dx
-        val dir = game.lookDirection.rotate(-params.fov / 2d + dx / size.x * params.fov)
-        val rc = game.map.rayCast(game.position, dir, params.maxDist)
-        rc match
-          case Some(RayCastResult(hitPos, hitWall, distance)) =>
-            g.setStroke(new BasicStroke(1))
-            g.setColor(hitWall.c.toColor)
-            //          val height = params.heightAtMin + distance / params.maxDist * (params.heightAtMax - params.heightAtMin)
-            val height = params.size.y / distance
-            g.drawLine(x, (lt.y + size.y / 2d - height / 2d).toInt , x, (lt.y + size.y / 2d + height / 2d).toInt)
-          case None =>
-        //          g.setStroke(new BasicStroke(1))
-        //          g.setColor(params.bgColor)
-        //          g.drawLine(x, 0, x, 1080)
-
-
-      }
-    }*/
 
 
   def renderMiniMap(g: Graphics2D, lt: V2, size: V2): Unit = {
@@ -164,8 +163,8 @@ class Render(
     }
     for ((x, y) <- game.map.indices) {
       val c = game.map.cell(x)(y)
-      if(c.wall.nonEmpty) {
-        drawCell(x, y, c.wall.get.colorMultiplier.toColor)
+      if(c.hasWall) {
+        drawCell(x, y, c.wallX.get.colorMultiplier.toColor)
       } else if(c.floor.nonEmpty) {
         drawCell(x, y, c.floor.get.colorMultiplier.toColor)
       }

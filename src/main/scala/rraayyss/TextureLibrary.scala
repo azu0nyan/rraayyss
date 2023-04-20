@@ -34,6 +34,6 @@ object TextureLibrary {
     tex.getRGB(x, y)
   }
 
-  def colorAt(name: String, u: Double, v: Double): Int =
-    colorAt(getTexture(name).get, u, v)
+//  def colorAt(name: String, u: Double, v: Double): Int =
+//    colorAt(getTexture(name).get, u, v)
 }

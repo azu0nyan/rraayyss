@@ -5,8 +5,9 @@ import drawing.core.SimpleDrawable
 import utils.math.Scalar
 import utils.math.planar.V2
 
-import java.awt.Graphics2D
+import java.awt.{Color, Graphics2D}
 import java.awt.event.{KeyEvent, KeyListener}
+import scala.util.Random
 
 case class GameConfig(
                        speed: Double = 3f,
@@ -51,6 +52,14 @@ class Game(
     backPressed = false
   }, false)
 
+  Drawing.addKeyBinding(KeyEvent.VK_SPACE, {
+    val rcr = map.rayCastFirstWall(position, lookDirection.rotate(new Random().nextDouble() * 0.1 - 0.05), 300)
+    rcr match
+      case Some(RayCastResult(hitPos, hitCell, distance)) =>
+        map.explode(hitPos.addZ(0.5 + new Random().nextDouble() * 0.2 - 0.2), 0.24, new Color(2,22,222).getRGB)
+      case None =>
+  }, false)
+
 
   override def drawAndUpdate(g: Graphics2D, dt: Scalar): Unit = {
     val fwd = (if (forwardPressed) 1 else 0) + (if (backPressed) -1 else 0)
@@ -58,5 +67,9 @@ class Game(
 
     lookDirection = lookDirection.rotate(lr * dt * config.turnSpeed)
     position = position + lookDirection * fwd * dt * config.speed
+
+    if(fwd != 0) {
+      map.explode(position.addZ(0d), 0.25, Color.CYAN.getRGB)
+    }
   }
 }

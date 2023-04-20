@@ -1,45 +1,51 @@
 package rraayyss
+
 import utils.heightmap.PerlinNoise
 import utils.math.planar.V2
+import utils.math.space.V3
 
 import java.awt.Color
 import java.awt.image.BufferedImage
 import scala.util.Random
 
 
-
 case class Cell(
-                 wall: Option[TexturedPlane] = None,
+                 wallX: Option[TexturedPlane] = None,
+                 wallX1: Option[TexturedPlane] = None,
+                 wallY: Option[TexturedPlane] = None,
+                 wallY1: Option[TexturedPlane] = None,
                  floor: Option[TexturedPlane] = None,
-                 ceil: Option[TexturedPlane] = None,               
-               ) 
+                 ceil: Option[TexturedPlane] = None,
+               ) {
+  def hasWall: Boolean = wallX1.nonEmpty || wallX.nonEmpty || wallY.nonEmpty || wallY1.nonEmpty
+}
 case class TexturedPlane(colorMultiplier: Col,
                          texture: BufferedImage,
-                         overlayTexture: Option[BufferedImage]) 
+                         overlayTexture: BufferedImage)
 
 case class RayCastResult(
                           hitPos: V2,
                           hitCell: Cell,
                           distance: Double
                         )
-object WorldMap{
-//  def fromPerlinNoise(size: V2): WorldMap = {
-//    def cFunc(x: Int)(y: Int): Cell = {
-//      val n = PerlinNoise.noise(x / 3f, y / 3f, 1f)
-//      if (x == 0 || y == 0 || x == (size.x.toInt - 1) || y == (size.y.toInt - 1) || n > 0.5) TexturedPlane(randomColor(x * 11231232 + y * 1111111))
-//      else EmptyCell
-//    }//
-//    WorldMap(xSize = size.xInt, ySize = size.yInt, cell = cFunc)
-//  }
+object WorldMap {
+  //  def fromPerlinNoise(size: V2): WorldMap = {
+  //    def cFunc(x: Int)(y: Int): Cell = {
+  //      val n = PerlinNoise.noise(x / 3f, y / 3f, 1f)
+  //      if (x == 0 || y == 0 || x == (size.x.toInt - 1) || y == (size.y.toInt - 1) || n > 0.5) TexturedPlane(randomColor(x * 11231232 + y * 1111111))
+  //      else EmptyCell
+  //    }//
+  //    WorldMap(xSize = size.xInt, ySize = size.yInt, cell = cFunc)
+  //  }
 }
-
 
 
 case class WorldMap(
                      xSize: Int = 16,
                      ySize: Int = 16,
                      cellSize: Int = 1,
-                     cell: Int => Int => Cell
+                     cell: Int => Int => Cell,
+                     overlaySize: Int = 32,
                    ) {
 
   var maxX = xSize * cellSize
@@ -84,13 +90,105 @@ case class WorldMap(
 
   def rayCastAllTiles(from: V2, dir: V2, maxLength: Double): Seq[RayCastResult] = {
     iterateOverGrid(from, dir).takeWhile(_.distance(from) <= maxLength).takeWhile(contains)
-      .map{case v@V2(x, y) => RayCastResult(v, cellAt(x, y).get, v.distance(from))}.toSeq
+      .map { case v@V2(x, y) => RayCastResult(v, cellAt(x, y).get, v.distance(from)) }.toSeq
   }
-  
+
   def rayCastFirstWall(from: V2, dir: V2, maxLength: Double): Option[RayCastResult] = {
     iterateOverGrid(from, dir).takeWhile(_.distance(from) <= maxLength).collect(pos => cellAt(pos.x, pos.y) match
-      case Some(c) if c.wall.nonEmpty => RayCastResult(pos, c, from.distance(pos))
+      case Some(c) if c.hasWall => RayCastResult(pos, c, from.distance(pos))
     ).toSeq.headOption
   }
+
+
+  def explode(at: V3, size: Double, color: Int): Unit = {
+    //    import math.BigDecimal.double2bigDecimal
+    val overlayPixelSize = 1d / overlaySize.toDouble
+    //    for (
+    //      xb <- (at.x - size) to (at.x + size) by overlayPixelSize;
+    //      yb <- (at.y - size) to (at.y + size) by overlayPixelSize;
+    //      zb <- (at.z - size) to (at.z + size) by overlayPixelSize;
+    //      c <- cellAt(xb.toDouble, yb.toDouble)
+    //    )
+    for (
+      xb <- ((at.x - size) * overlaySize).toInt to ((at.x + size) * overlaySize).toInt;
+      yb <- ((at.y - size) * overlaySize).toInt to ((at.y + size) * overlaySize).toInt;
+      zb <- ((at.z - size) * overlaySize).toInt to ((at.z + size) * overlaySize).toInt;
+      x = xb / overlaySize.toDouble;
+      y = yb / overlaySize.toDouble;
+      z = zb / overlaySize.toDouble;
+      pos = V3(x, y, z) if pos.distance(at) <= size;
+      c <- cellAt(xb / overlaySize.toDouble, yb / overlaySize.toDouble)
+    ) {
+
+      val (cposX, cposY): (Int, Int) = cellPos(x, y)
+      if (c.hasWall && 0 < z && z <= 1) {
+        val zHeight = ((1d - z) * overlaySize).toInt
+
+        if ((x - cposX) <= overlayPixelSize) {
+          val xPos = ((y - cposY) * overlaySize).toInt
+
+          val oldColor = c.wallX.get.overlayTexture.getRGB(xPos, zHeight)
+          val newColor = Col.combineWithAlpha(oldColor, color)
+          c.wallX.get.overlayTexture.setRGB(xPos, zHeight, newColor)
+        }
+        if (x - cposX >= 1 - overlayPixelSize) {
+          val xPos = ((y - cposY) * overlaySize).toInt
+
+          val oldColor = c.wallX.get.overlayTexture.getRGB(xPos, zHeight)
+          val newColor = Col.combineWithAlpha(oldColor, color)
+          c.wallX1.get.overlayTexture.setRGB(xPos, zHeight, newColor)
+        }
+        if (y - cposY <= overlayPixelSize) {
+          val yPos = ((x - cposX) * overlaySize).toInt
+
+          val oldColor = c.wallX.get.overlayTexture.getRGB(yPos, zHeight)
+          val newColor = Col.combineWithAlpha(oldColor, color)
+          c.wallY.get.overlayTexture.setRGB(yPos, zHeight, newColor)
+        }
+
+        if (y - cposY >= 1 - overlayPixelSize) {
+          val yPos = ((x - cposX) * overlaySize).toInt
+          val oldColor = c.wallX.get.overlayTexture.getRGB(yPos, zHeight)
+          val newColor = Col.combineWithAlpha(oldColor, color)
+          c.wallY1.get.overlayTexture.setRGB(yPos, zHeight, newColor)
+        }
+      }
+
+      //floors
+      if (!c.hasWall && z < overlayPixelSize && c.floor.nonEmpty) {
+        val cx = ((x - cposX) * overlaySize).toInt
+        val cy = ((y - cposY) * overlaySize).toInt
+
+        val oldColor = c.floor.get.overlayTexture.getRGB(cx, cy)
+        val newColor = Col.combineWithAlpha(oldColor, color)
+        c.floor.get.overlayTexture.setRGB(cx, cy, newColor)
+      }
+      //ceils
+      if (!c.hasWall && z > 1d - overlayPixelSize && c.ceil.nonEmpty) {
+        val cx = ((x - cposX) * overlaySize).toInt
+        val cy = ((y - cposY) * overlaySize).toInt
+
+        val oldColor = c.ceil.get.overlayTexture.getRGB(cx, cy)
+        val newColor = Col.combineWithAlpha(oldColor, color)
+        c.ceil.get.overlayTexture.setRGB(cx, cy, newColor)
+      }
+    }
+  }
+
+  //  def shoot(from: V3, dir: V3, maxDist: Double) = {
+  //
+  //    def heightAt(dist: Double): Double = (from + dir * dist).z
+  //    val poss = iterateOverGrid(from.dropZ, dir.dropZ)
+  //      .takeWhile(_.distance(from.dropZ) < maxDist)
+  //      .takeWhile(contains)
+  //
+  //    val hitWall = rayCastFirstWall(from.dropZ, dir.dropZ, maxDist)
+  //    hitWall match
+  //      case Some(RayCastResult(hitPos, hitCell, distance)) => if(heightAt(hitPos) )
+  //      case None => ???
+  //
+  //
+  //  }
+
 }
 
