@@ -1,9 +1,8 @@
 package rraayyss
 
-import drawing.core.SimpleDrawable
 import rraayyss.Game
-import utils.math.Scalar
-import utils.math.planar.V2
+import utils.math.V2
+import window.SimpleDrawable
 
 import java.awt.image.BufferedImage
 import java.awt.{BasicStroke, Color, Graphics2D}
@@ -16,7 +15,9 @@ case class RenderParams(
                          heightAtMin: Double = 600,
                          bgColor: Color = Color.CYAN,
                          lt: V2 = V2(100, 100),
-                         size: V2 = V2(1000, 600)
+                         size: V2 = V2(1000, 600),
+                         minimaplt: V2 = V2(100, 100),
+                         minimapSize: V2 = V2(1000, 600),
 
                        )
 
@@ -24,11 +25,11 @@ class Render(
               game: Game,
               params: RenderParams = RenderParams()
             ) extends SimpleDrawable {
-  override def drawAndUpdate(g: Graphics2D, dt: Scalar): Unit = {
+  override def drawAndUpdate(g: Graphics2D, dt: Double): Unit = {
     g.setColor(Color.BLACK)
     g.fillRect(100, 100, System.currentTimeMillis().toInt % 1920.toInt, 300)
 
-    renderMiniMap(g, V2(1100, 100), V2(700, 700))
+    renderMiniMap(g, params.minimaplt, params.minimapSize)
     renderGame(g, params.lt, params.size)
   }
 

@@ -1,8 +1,7 @@
 package rraayyss
 
-import utils.heightmap.PerlinNoise
-import utils.math.planar.V2
-import utils.math.space.V3
+import utils.math.V2
+import utils.math.V3
 
 import java.awt.Color
 import java.awt.image.BufferedImage

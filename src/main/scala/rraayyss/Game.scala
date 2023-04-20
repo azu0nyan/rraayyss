@@ -1,9 +1,7 @@
 package rraayyss
 
-import drawing.Drawing
-import drawing.core.SimpleDrawable
-import utils.math.Scalar
-import utils.math.planar.V2
+import utils.math.V2
+import window.{GameWindow, SimpleDrawable}
 
 import java.awt.{Color, Graphics2D}
 import java.awt.event.{KeyEvent, KeyListener}
@@ -15,7 +13,7 @@ case class GameConfig(
                      )
 
 
-class Game(
+class Game( window: GameWindow,
             var config: GameConfig = GameConfig(),
             var position: V2 = V2(3, 3),
             var lookDirection: V2 = V2(1, 1).normalize,
@@ -27,32 +25,32 @@ class Game(
   var backPressed = false
 
 
-  Drawing.addKeyBinding(KeyEvent.VK_A, {
+  window.addKeyBinding(KeyEvent.VK_A, {
     leftPressed = true
   }, true)
-  Drawing.addKeyBinding(KeyEvent.VK_A, {
+  window.addKeyBinding(KeyEvent.VK_A, {
     leftPressed = false
   }, false)
-  Drawing.addKeyBinding(KeyEvent.VK_D, {
+  window.addKeyBinding(KeyEvent.VK_D, {
     rightPressed = true
   }, true)
-  Drawing.addKeyBinding(KeyEvent.VK_D, {
+  window.addKeyBinding(KeyEvent.VK_D, {
     rightPressed = false
   }, false)
-  Drawing.addKeyBinding(KeyEvent.VK_W, {
+  window.addKeyBinding(KeyEvent.VK_W, {
     forwardPressed = true
   }, true)
-  Drawing.addKeyBinding(KeyEvent.VK_W, {
+  window.addKeyBinding(KeyEvent.VK_W, {
     forwardPressed = false
   }, false)
-  Drawing.addKeyBinding(KeyEvent.VK_S, {
+  window.addKeyBinding(KeyEvent.VK_S, {
     backPressed = true
   }, true)
-  Drawing.addKeyBinding(KeyEvent.VK_S, {
+  window.addKeyBinding(KeyEvent.VK_S, {
     backPressed = false
   }, false)
 
-  Drawing.addKeyBinding(KeyEvent.VK_SPACE, {
+  window.addKeyBinding(KeyEvent.VK_SPACE, {
     val rcr = map.rayCastFirstWall(position, lookDirection.rotate(new Random().nextDouble() * 0.1 - 0.05), 300)
     rcr match
       case Some(RayCastResult(hitPos, hitCell, distance)) =>
@@ -61,7 +59,7 @@ class Game(
   }, false)
 
 
-  override def drawAndUpdate(g: Graphics2D, dt: Scalar): Unit = {
+  override def drawAndUpdate(g: Graphics2D, dt: Double): Unit = {
     val fwd = (if (forwardPressed) 1 else 0) + (if (backPressed) -1 else 0)
     val lr = (if (leftPressed) -1 else 0) + (if (rightPressed) 1 else 0)
 
