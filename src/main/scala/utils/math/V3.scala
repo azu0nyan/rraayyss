@@ -55,9 +55,6 @@ case class V3(x: Double, y: Double, z: Double) {
 
   @inline def distanceSquared(v: V3): Double = (this - v).lengthSquared
 
-  //todo
-  //def rotate(a: Double) = V3(x * math.cos(a).toDouble - y * math.sin(a).toDouble, x * math.sin(a).toDouble + y * math.cos(a).toDouble)
-
   @inline def lengthSquared: Double = this ** this
 
   @inline def length: Double = math.sqrt(lengthSquared)

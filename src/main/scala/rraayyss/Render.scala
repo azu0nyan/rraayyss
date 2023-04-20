@@ -6,6 +6,7 @@ import window.SimpleDrawable
 
 import java.awt.image.BufferedImage
 import java.awt.{BasicStroke, Color, Graphics2D}
+import java.util.concurrent.CountDownLatch
 import javax.imageio.ImageTypeSpecifier
 
 case class RenderParams(
@@ -18,13 +19,15 @@ case class RenderParams(
                          size: V2 = V2(1000, 600),
                          minimaplt: V2 = V2(100, 100),
                          minimapSize: V2 = V2(1000, 600),
-
+                         threads: Int = 10,
                        )
 
 class Render(
               game: Game,
               params: RenderParams = RenderParams()
             ) extends SimpleDrawable {
+  println(s"Created renders with ${params.threads} threads.")
+
   override def drawAndUpdate(g: Graphics2D, dt: Double): Unit = {
     g.setColor(Color.BLACK)
     g.fillRect(100, 100, System.currentTimeMillis().toInt % 1920.toInt, 300)
@@ -46,10 +49,10 @@ class Render(
 
     val bi = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     val gr = bi.getGraphics
-    gr.setColor(Color.RED)
+    gr.setColor(Color.BLUE)
     gr.fillRect(0, 0, width, height)
 
-    for (x <- 0 until width) {
+    def renderRay(x: Int): Unit = {
       val dirAngleOfset = -params.fov / 2d + x.toDouble / width * params.fov
       val dir = game.lookDirection.rotate(dirAngleOfset)
       def wHeight(dist: Double): Double = params.size.y / (dist * math.cos(dirAngleOfset))
@@ -69,16 +72,13 @@ class Render(
           if (f.hitCell.floor.nonEmpty) {
             val floor = f.hitCell.floor.get
             def cFuncFloor(pct: Double): Int = {
-              val nPct = if(pct < 0.01) 0.01 else if(pct > 0.99) 0.99 else pct //hack to compensate rayCasting offset todo fix
+              val nPct = if (pct < 0.01) 0.01 else if (pct > 0.99) 0.99 else pct //hack to compensate rayCasting offset todo fix
               val p = secondHit + body * nPct
               val u = p.x - p.x.floor
               val v = p.y - p.y.floor
               val cAt = TextureLibrary.colorAt(floor.texture, u, v)
               val oAt = TextureLibrary.colorAt(floor.overlayTexture, u, v)
               val col = Col.multiplyAdd(cAt, oAt, floor.colorMultiplier)
-//              if(col == Color.CYAN.getRGB) {
-//                println(s"${pct} ${secondHit} ${firstHit} $cAt $oAt $col")
-//              }
               col
             }
 
@@ -87,7 +87,7 @@ class Render(
           if (f.hitCell.ceil.nonEmpty) {
             val ceil = f.hitCell.ceil.get
             def cFuncCeil(pct: Double): Int = {
-              val nPct = if(pct < 0.01) 0.01 else if(pct > 0.99) 0.99 else pct //hack to compensate rayCasting offset todo fix
+              val nPct = if (pct < 0.01) 0.01 else if (pct > 0.99) 0.99 else pct //hack to compensate rayCasting offset todo fix
               val p = firstHit + (secondHit - firstHit) * nPct
               val u = p.x - p.x.floor
               val v = p.y - p.y.floor
@@ -102,7 +102,7 @@ class Render(
       }
       //paint wall
 
-      if (tId >= 0 &&  rc(tId).hitCell.hasWall) {
+      if (tId >= 0 && rc(tId).hitCell.hasWall) {
         val hitResult = rc(tId)
         val cell = hitResult.hitCell
         val eps = 0.0005d
@@ -111,12 +111,12 @@ class Render(
         val (cposX, cposY) = game.map.cellPos(hitResult.hitPos.x, hitResult.hitPos.y)
 
         val wallSide: TexturedPlane =
-          if( hitResult.hitPos.x - cposX  < eps) cell.wallX.get
+          if (hitResult.hitPos.x - cposX < eps) cell.wallX.get
           else if (hitResult.hitPos.x - cposX > 1 - eps) cell.wallX1.get
-          else if (hitResult.hitPos.y - cposY  < eps) cell.wallY.get
-          else if (hitResult.hitPos.y - cposY  > 1  -eps) cell.wallY1.get
+          else if (hitResult.hitPos.y - cposY < eps) cell.wallY.get
+          else if (hitResult.hitPos.y - cposY > 1 - eps) cell.wallY1.get
           else {
-//            throw new Exception(s"Can't detect side ${hitResult.hitPos.x - cposX} ${hitResult.hitPos.y - cposY}")
+            //            throw new Exception(s"Can't detect side ${hitResult.hitPos.x - cposX} ${hitResult.hitPos.y - cposY}") //todo fix
             cell.wallX.get
           }
 
@@ -132,6 +132,18 @@ class Render(
       }
 
     }
+    val cl = new CountDownLatch(params.threads)
+    for (i <- 0 until params.threads) {
+      new Thread(() => {
+        for (x <- i * (width / params.threads.toDouble ).ceil.toInt until math.min(width, (i + 1) * (width / params.threads.toDouble ).ceil.toInt)) {
+
+          renderRay(x)
+        }
+        cl.countDown()
+      }).start()
+    }
+
+    cl.await()
     bi
   }
 
@@ -139,7 +151,6 @@ class Render(
     val bi = renderGameWorld(size.xInt, size.yInt)
     g.drawImage(bi, lt.xInt, lt.yInt, null)
   }
-
 
 
   def renderMiniMap(g: Graphics2D, lt: V2, size: V2): Unit = {
@@ -164,9 +175,9 @@ class Render(
     }
     for ((x, y) <- game.map.indices) {
       val c = game.map.cell(x)(y)
-      if(c.hasWall) {
+      if (c.hasWall) {
         drawCell(x, y, c.wallX.get.colorMultiplier.toColor)
-      } else if(c.floor.nonEmpty) {
+      } else if (c.floor.nonEmpty) {
         drawCell(x, y, c.floor.get.colorMultiplier.toColor)
       }
     }
