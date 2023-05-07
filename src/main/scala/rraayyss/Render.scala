@@ -6,8 +6,10 @@ import window.SimpleDrawable
 
 import java.awt.image.BufferedImage
 import java.awt.{BasicStroke, Color, Graphics2D}
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, Executors}
 import javax.imageio.ImageTypeSpecifier
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 case class RenderParams(
                          fov: Double = Math.PI / 3d,
@@ -28,26 +30,45 @@ class Render(
             ) extends SimpleDrawable {
   println(s"Created renders with ${params.threads} threads.")
 
+  //  val fjp = new ForkJoinPool(params.threads)
+
+  implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newWorkStealingPool(params.threads))
+
   override def drawAndUpdate(g: Graphics2D, dt: Double): Unit = {
     g.setColor(Color.BLACK)
     g.fillRect(100, 100, System.currentTimeMillis().toInt % 1920.toInt, 300)
 
-    renderMiniMap(g, params.minimaplt, params.minimapSize)
-    renderGame(g, params.lt, params.size)
+
+//    renderMiniMap(g, params.minimaplt, params.minimapSize)
+//    renderGame(g, params.lt, params.size)
+    val f1 = Future(renderMiniMap(g, params.minimaplt, params.minimapSize))
+    val f2 = Future(renderGame(g, params.lt, params.size))
+
+    Await.result(f1, Duration.Inf)
+    Await.result(f2, Duration.Inf)
+
   }
 
 
-  def fillVertical(in: BufferedImage, x: Int, minY: Int, maxY: Int, colorFromFract: Double => Int = c => Color.BLACK.getRGB): Unit = {
+  def fillVertical(in: BufferedImage, x: Int, minY: Int, maxY: Int,
+                   colorFromFract: Double => Int = c => Color.BLACK.getRGB)(depthMin: Double, depthMax: Double, depthBuffer: Array[Double]): Unit = {
     for (y <- math.max(0, minY) until math.min(maxY, in.getHeight)) {
       val pct = (y - minY).toDouble / (maxY - minY).toDouble
       val col = colorFromFract(pct)
-      in.setRGB(x, y, col)
+      val depth = depthMin + (depthMax - depthMin) * (y - minY) / (maxY - minY)
+      if (depthBuffer(y * in.getWidth + x) < depth) {
+        depthBuffer(y * in.getWidth + x) = depth
+        val finalCol: Int = Col.combineWithAlpha(in.getRGB(x, y), col)
+        in.setRGB(x, y, finalCol)
+      }
     }
   }
 
   def renderGameWorld(width: Int, height: Int): BufferedImage = {
 
     val bi = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    val depthBuffer = Array.fill(width * height)(Double.MinValue)
+
     val gr = bi.getGraphics
     gr.setColor(Color.BLUE)
     gr.fillRect(0, 0, width, height)
@@ -82,7 +103,7 @@ class Render(
               col
             }
 
-            fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFuncFloor)
+            fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFuncFloor)(s.distance, f.distance, depthBuffer)
           }
           if (f.hitCell.ceil.nonEmpty) {
             val ceil = f.hitCell.ceil.get
@@ -96,7 +117,7 @@ class Render(
               Col.multiplyAdd(cAt, oAt, ceil.colorMultiplier)
             }
 
-            fillVertical(bi, x, wTop(f.distance), wTop(s.distance), cFuncCeil)
+            fillVertical(bi, x, wTop(f.distance), wTop(s.distance), cFuncCeil)(f.distance, s.distance, depthBuffer)
           }
         }
       }
@@ -128,22 +149,21 @@ class Render(
           Col.multiplyAdd(cAt, oAt, wallSide.colorMultiplier)
 
 
-        fillVertical(bi, x, wTop(hitResult.distance), wBot(hitResult.distance), cFunc)
+        fillVertical(bi, x, wTop(hitResult.distance), wBot(hitResult.distance), cFunc)(hitResult.distance, hitResult.distance, depthBuffer)
       }
 
     }
-    val cl = new CountDownLatch(params.threads)
-    for (i <- 0 until params.threads) {
-      new Thread(() => {
-        for (x <- i * (width / params.threads.toDouble ).ceil.toInt until math.min(width, (i + 1) * (width / params.threads.toDouble ).ceil.toInt)) {
 
-          renderRay(x)
-        }
-        cl.countDown()
-      }).start()
+    val ccd = new CountDownLatch(width)
+    val futs = for (x <-  0 until width) yield Future{
+      renderRay(x)
+      ccd.countDown()
     }
 
-    cl.await()
+    ccd.await()
+    //с CountDownLatch на 2 FPS больше чем с
+    // Await.result(Future.sequence(futs), Duration.Inf)
+
     bi
   }
 
