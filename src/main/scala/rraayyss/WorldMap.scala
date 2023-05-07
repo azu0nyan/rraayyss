@@ -5,6 +5,7 @@ import utils.math.V3
 
 import java.awt.Color
 import java.awt.image.BufferedImage
+import scala.collection.mutable
 import scala.util.Random
 
 
@@ -17,10 +18,16 @@ case class Cell(
                  ceil: Option[TexturedPlane] = None,
                ) {
   def hasWall: Boolean = wallX1.nonEmpty || wallX.nonEmpty || wallY.nonEmpty || wallY1.nonEmpty
+
 }
 case class TexturedPlane(colorMultiplier: Col,
                          texture: BufferedImage,
-                         overlayTexture: BufferedImage)
+                         overlayTexture: BufferedImage) {
+
+//  overlayTexture.setRGB(0, 0, overlayTexture.getWidth(), overlayTexture.getHeight,
+//    Array.fill(overlayTexture.getWidth() * overlayTexture.getHeight())(new Color(130, 0, 0, 140).getRGB), 0, 1)
+
+}
 
 case class RayCastResult(
                           hitPos: V2,
@@ -100,14 +107,18 @@ case class WorldMap(
 
 
   def explode(at: V3, size: Double, color: Int): Unit = {
-    //    import math.BigDecimal.double2bigDecimal
+
     val overlayPixelSize = 1d / overlaySize.toDouble
-    //    for (
-    //      xb <- (at.x - size) to (at.x + size) by overlayPixelSize;
-    //      yb <- (at.y - size) to (at.y + size) by overlayPixelSize;
-    //      zb <- (at.z - size) to (at.z + size) by overlayPixelSize;
-    //      c <- cellAt(xb.toDouble, yb.toDouble)
-    //    )
+
+    val painted: mutable.Set[(BufferedImage, Int, Int)] = mutable.Set()
+
+    def paint(b: BufferedImage, x: Int, y: Int, color: Int): Unit = {
+      if(! painted.contains(b, x, y)) {
+        painted += ((b, x, y))
+        b.setRGB(x, y, color)
+      }
+    }
+
     for (
       xb <- ((at.x - size) * overlaySize).toInt to ((at.x + size) * overlaySize).toInt;
       yb <- ((at.y - size) * overlaySize).toInt to ((at.y + size) * overlaySize).toInt;
@@ -128,28 +139,28 @@ case class WorldMap(
 
           val oldColor = c.wallX.get.overlayTexture.getRGB(xPos, zHeight)
           val newColor = Col.combineWithAlpha(oldColor, color)
-          c.wallX.get.overlayTexture.setRGB(xPos, zHeight, newColor)
+          paint(c.wallX.get.overlayTexture, xPos, zHeight, newColor)
         }
         if (x - cposX >= 1 - overlayPixelSize) {
           val xPos = ((y - cposY) * overlaySize).toInt
 
-          val oldColor = c.wallX.get.overlayTexture.getRGB(xPos, zHeight)
+          val oldColor = c.wallX1.get.overlayTexture.getRGB(xPos, zHeight)
           val newColor = Col.combineWithAlpha(oldColor, color)
-          c.wallX1.get.overlayTexture.setRGB(xPos, zHeight, newColor)
+          paint(c.wallX1.get.overlayTexture, xPos, zHeight, newColor)
         }
         if (y - cposY <= overlayPixelSize) {
           val yPos = ((x - cposX) * overlaySize).toInt
 
-          val oldColor = c.wallX.get.overlayTexture.getRGB(yPos, zHeight)
+          val oldColor = c.wallY.get.overlayTexture.getRGB(yPos, zHeight)
           val newColor = Col.combineWithAlpha(oldColor, color)
-          c.wallY.get.overlayTexture.setRGB(yPos, zHeight, newColor)
+          paint(c.wallY.get.overlayTexture, yPos, zHeight, newColor)
         }
 
         if (y - cposY >= 1 - overlayPixelSize) {
           val yPos = ((x - cposX) * overlaySize).toInt
-          val oldColor = c.wallX.get.overlayTexture.getRGB(yPos, zHeight)
+          val oldColor = c.wallY1.get.overlayTexture.getRGB(yPos, zHeight)
           val newColor = Col.combineWithAlpha(oldColor, color)
-          c.wallY1.get.overlayTexture.setRGB(yPos, zHeight, newColor)
+          paint(c.wallY1.get.overlayTexture, yPos, zHeight, newColor)
         }
       }
 
@@ -160,7 +171,7 @@ case class WorldMap(
 
         val oldColor = c.floor.get.overlayTexture.getRGB(cx, cy)
         val newColor = Col.combineWithAlpha(oldColor, color)
-        c.floor.get.overlayTexture.setRGB(cx, cy, newColor)
+        paint(c.floor.get.overlayTexture, cx, cy, newColor)
       }
       //ceils
       if (!c.hasWall && z > 1d - overlayPixelSize && c.ceil.nonEmpty) {
@@ -169,7 +180,7 @@ case class WorldMap(
 
         val oldColor = c.ceil.get.overlayTexture.getRGB(cx, cy)
         val newColor = Col.combineWithAlpha(oldColor, color)
-        c.ceil.get.overlayTexture.setRGB(cx, cy, newColor)
+        paint(c.ceil.get.overlayTexture, cx, cy, newColor)
       }
     }
   }

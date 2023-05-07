@@ -54,7 +54,7 @@ class Game( window: GameWindow,
     val rcr = map.rayCastFirstWall(position, lookDirection.rotate(new Random().nextDouble() * 0.1 - 0.05), 300)
     rcr match
       case Some(RayCastResult(hitPos, hitCell, distance)) =>
-        map.explode(hitPos.addZ(0.5 + new Random().nextDouble() * 0.2 - 0.2), 0.24, new Color(2,22,222).getRGB)
+        map.explode(hitPos.addZ(0.5 + new Random().nextDouble() * 0.2 - 0.2), 0.24, new Color(2,22,222, 120).getRGB)
       case None =>
   }, false)
 
@@ -67,7 +67,7 @@ class Game( window: GameWindow,
     position = position + lookDirection * fwd * dt * config.speed
 
     if(fwd != 0) {
-      map.explode(position.addZ(0d), 0.25, Color.CYAN.getRGB)
+      map.explode(position.addZ(0d), 0.25, new Color(10, 150, 10, 120).getRGB)
     }
   }
 }
