@@ -16,6 +16,7 @@ case class Cell(
                  wallY1: Option[TexturedPlane] = None,
                  floor: Option[TexturedPlane] = None,
                  ceil: Option[TexturedPlane] = None,
+                 sprites: Seq[Sprite] = Seq()
                ) {
   def hasWall: Boolean = wallX1.nonEmpty || wallX.nonEmpty || wallY.nonEmpty || wallY1.nonEmpty
 
@@ -24,8 +25,8 @@ case class TexturedPlane(colorMultiplier: Col,
                          texture: BufferedImage,
                          overlayTexture: BufferedImage) {
 
-//  overlayTexture.setRGB(0, 0, overlayTexture.getWidth(), overlayTexture.getHeight,
-//    Array.fill(overlayTexture.getWidth() * overlayTexture.getHeight())(new Color(130, 0, 0, 140).getRGB), 0, 1)
+  //  overlayTexture.setRGB(0, 0, overlayTexture.getWidth(), overlayTexture.getHeight,
+  //    Array.fill(overlayTexture.getWidth() * overlayTexture.getHeight())(new Color(130, 0, 0, 140).getRGB), 0, 1)
 
 }
 
@@ -60,6 +61,8 @@ case class WorldMap(
   def contains(pos: V2): Boolean = pos.x >= 0 && pos.y > 0 && pos.x < maxX && pos.y < maxY
 
   def indices: Iterator[(Int, Int)] = for (x <- (0 until xSize).iterator; y <- (0 until ySize).iterator) yield (x, y)
+
+  def cells: Seq[Cell] = indices.map((a, b) => cell(a)(b)).toSeq
 
   def cellPos(x: Double, y: Double): (Int, Int) = ((x / cellSize).floor.toInt, (y / cellSize).floor.toInt)
 
@@ -113,7 +116,7 @@ case class WorldMap(
     val painted: mutable.Set[(BufferedImage, Int, Int)] = mutable.Set()
 
     def paint(b: BufferedImage, x: Int, y: Int, color: Int): Unit = {
-      if(! painted.contains(b, x, y)) {
+      if (!painted.contains(b, x, y)) {
         painted += ((b, x, y))
         b.setRGB(x, y, color)
       }

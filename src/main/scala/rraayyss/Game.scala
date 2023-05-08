@@ -16,29 +16,31 @@ case class GameConfig(
 class Game( window: GameWindow,
             var config: GameConfig = GameConfig(),
             var position: V2 = V2(3, 3),
-            var lookDirection: V2 = V2(1, 1).normalize,
+            var lookDirection: V2 = V2(-1, -1).normalize,
             var map: WorldMap
           ) extends SimpleDrawable {
   
-  def sprites: Seq[Sprite] = Seq()
+  def sprites: Seq[Sprite] = map.cells.flatMap(_.sprites)
   
   
   var leftPressed = false
   var rightPressed = false
   var forwardPressed = false
   var backPressed = false
+  var leftStrafePressed = false
+  var rightStrafePressed = false
 
 
-  window.addKeyBinding(KeyEvent.VK_A, {
+  window.addKeyBinding(KeyEvent.VK_Q, {
     leftPressed = true
   }, true)
-  window.addKeyBinding(KeyEvent.VK_A, {
+  window.addKeyBinding(KeyEvent.VK_Q, {
     leftPressed = false
   }, false)
-  window.addKeyBinding(KeyEvent.VK_D, {
+  window.addKeyBinding(KeyEvent.VK_E, {
     rightPressed = true
   }, true)
-  window.addKeyBinding(KeyEvent.VK_D, {
+  window.addKeyBinding(KeyEvent.VK_E, {
     rightPressed = false
   }, false)
   window.addKeyBinding(KeyEvent.VK_W, {
@@ -54,6 +56,20 @@ class Game( window: GameWindow,
     backPressed = false
   }, false)
 
+  window.addKeyBinding(KeyEvent.VK_A, {
+    leftStrafePressed = true
+  }, true)
+  window.addKeyBinding(KeyEvent.VK_A, {
+    leftStrafePressed = false
+  }, false)
+
+  window.addKeyBinding(KeyEvent.VK_D, {
+    rightStrafePressed = true
+  }, true)
+  window.addKeyBinding(KeyEvent.VK_D, {
+    rightStrafePressed = false
+  }, false)
+
   window.addKeyBinding(KeyEvent.VK_SPACE, {
     val rcr = map.rayCastFirstWall(position, lookDirection.rotate(new Random().nextDouble() * 0.1 - 0.05), 300)
     rcr match
@@ -66,9 +82,10 @@ class Game( window: GameWindow,
   override def drawAndUpdate(g: Graphics2D, dt: Double): Unit = {
     val fwd = (if (forwardPressed) 1 else 0) + (if (backPressed) -1 else 0)
     val lr = (if (leftPressed) -1 else 0) + (if (rightPressed) 1 else 0)
+    val strafeLR = (if(leftStrafePressed) -1 else 0) + (if(rightStrafePressed) 1 else 0)
 
     lookDirection = lookDirection.rotate(lr * dt * config.turnSpeed)
-    position = position + lookDirection * fwd * dt * config.speed
+    position = position + lookDirection * fwd * dt * config.speed + lookDirection.rotate90CCW * strafeLR * dt * config.speed
 
     if(fwd != 0) {
       map.explode(position.addZ(0d), 0.25, new Color(10, 150, 10, 120).getRGB)

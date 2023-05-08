@@ -12,7 +12,7 @@ case class Sprite(
 
   def leftPos(viewDir: V2): V2 = {
     val dir = faceDir match
-      case Some(faceDir) => faceDir.rotate90CCW
+      case Some(faceDir) => (-faceDir).rotate90CCW
       case None => viewDir.rotate90CCW
 
     position + dir * bounds._1.x
@@ -20,8 +20,8 @@ case class Sprite(
 
   def rightPos(viewDir: V2): V2 = {
     val dir = faceDir match
-      case Some(faceDir) => faceDir.rotate90CW
-      case None => viewDir.rotate90CW
+      case Some(faceDir) => (-faceDir).rotate90CCW
+      case None => viewDir.rotate90CCW
 
     position + dir * bounds._2.x
   }

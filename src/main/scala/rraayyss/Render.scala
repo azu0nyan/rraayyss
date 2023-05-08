@@ -168,17 +168,17 @@ class Render(
           val lpos = s.leftPos(game.lookDirection)
           val toLpos = lpos - game.position
           val toLAngle = game.lookDirection.angleCCW(toLpos)
-          val onScreenLeft = (toLAngle - params.fov / 2)/ (params.fov ) * (width )
+          val onScreenLeft = (toLAngle + params.fov / 2)/ (params.fov ) * (width )
 
           val rpos = s.rightPos(game.lookDirection)
           val toRpos = rpos - game.position
           val toRAngle = game.lookDirection.angleCCW(toRpos)
-          val onScreenRight = (toRAngle - params.fov / 2) / (params.fov) * (width)
+          val onScreenRight =  (toRAngle + params.fov / 2) / (params.fov) * (width)
 
           val bot = posAtDist(height, toSprite.length, toLAngle, s.bounds._1.y)
           val top = posAtDist(height, toSprite.length, toRAngle, s.bounds._2.y)
 
-          bi.getGraphics.drawImage(s.tex, math.min(onScreenLeft, onScreenRight).toInt, bot.toInt, math.abs(onScreenLeft - onScreenRight).toInt, math.abs(bot - top).toInt, null)
+          bi.getGraphics.drawImage(s.tex, math.min(onScreenLeft, onScreenRight).toInt, top.toInt, math.abs(onScreenLeft - onScreenRight).toInt, math.abs(bot - top).toInt, null)
 
         }
     }
@@ -195,6 +195,7 @@ class Render(
 
     val sp = game.sprites
     val ccdSprites = new CountDownLatch(sp.size)
+
     for (s <- sp) yield Future {
       renderSprite(s)
       ccdSprites.countDown()
