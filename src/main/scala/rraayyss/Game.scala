@@ -19,6 +19,10 @@ class Game( window: GameWindow,
             var lookDirection: V2 = V2(1, 1).normalize,
             var map: WorldMap
           ) extends SimpleDrawable {
+  
+  def sprites: Seq[Sprite] = Seq()
+  
+  
   var leftPressed = false
   var rightPressed = false
   var forwardPressed = false

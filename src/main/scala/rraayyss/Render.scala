@@ -8,7 +8,7 @@ import java.awt.image.BufferedImage
 import java.awt.{BasicStroke, Color, Graphics2D}
 import java.util.concurrent.{CountDownLatch, Executors}
 import javax.imageio.ImageTypeSpecifier
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, pairIntToDuration}
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 case class RenderParams(
@@ -39,8 +39,8 @@ class Render(
     g.fillRect(100, 100, System.currentTimeMillis().toInt % 1920.toInt, 300)
 
 
-//    renderMiniMap(g, params.minimaplt, params.minimapSize)
-//    renderGame(g, params.lt, params.size)
+    //    renderMiniMap(g, params.minimaplt, params.minimapSize)
+    //    renderGame(g, params.lt, params.size)
     val f1 = Future(renderMiniMap(g, params.minimaplt, params.minimapSize))
     val f2 = Future(renderGame(g, params.lt, params.size))
 
@@ -64,6 +64,11 @@ class Render(
     }
   }
 
+
+  def heightAtDist(screenMax: Double, dist: Double, dirAngleOffset: Double): Double = screenMax / (dist * math.cos(dirAngleOffset))
+
+  def posAtDist(screenMax:Double, dist: Double, dirAngleOffset: Double, pos: Double): Double = screenMax / 2d  - heightAtDist(screenMax, dist, dirAngleOffset) * pos / 2d
+
   def renderGameWorld(width: Int, height: Int): BufferedImage = {
 
     val bi = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
@@ -74,11 +79,14 @@ class Render(
     gr.fillRect(0, 0, width, height)
 
     def renderRay(x: Int): Unit = {
-      val dirAngleOfset = -params.fov / 2d + x.toDouble / width * params.fov
-      val dir = game.lookDirection.rotate(dirAngleOfset)
-      def wHeight(dist: Double): Double = params.size.y / (dist * math.cos(dirAngleOfset))
-      def wBot(dist: Double): Int = (height / 2d + wHeight(dist) / 2d).toInt
-      def wTop(dist: Double): Int = (height / 2d - wHeight(dist) / 2d).toInt
+      val dirAngleOffset = -params.fov / 2d + x.toDouble / width * params.fov
+      val dir = game.lookDirection.rotate(dirAngleOffset)
+//      def wHeight(dist: Double): Double = heightAtDist(height, dist, dirAngleOffset)
+//      def wallBot(dist: Double): Int = (height / 2d + wHeight(dist) / 2d).toInt
+//      def wallTop(dist: Double): Int = (height / 2d - wHeight(dist) / 2d).toInt
+
+      def wallBot(dist:Double):Int = posAtDist(height, dist, dirAngleOffset, -1).toInt
+      def wallTop(dist:Double):Int = posAtDist(height, dist, dirAngleOffset, 1).toInt
 
       val rc = game.map.rayCastAllTiles(game.position, dir, params.maxDist)
       val tId = rc.indexWhere(_.hitCell.hasWall)
@@ -103,7 +111,7 @@ class Render(
               col
             }
 
-            fillVertical(bi, x, wBot(s.distance), wBot(f.distance), cFuncFloor)(s.distance, f.distance, depthBuffer)
+            fillVertical(bi, x, wallBot(s.distance), wallBot(f.distance), cFuncFloor)(s.distance, f.distance, depthBuffer)
           }
           if (f.hitCell.ceil.nonEmpty) {
             val ceil = f.hitCell.ceil.get
@@ -117,7 +125,7 @@ class Render(
               Col.multiplyAdd(cAt, oAt, ceil.colorMultiplier)
             }
 
-            fillVertical(bi, x, wTop(f.distance), wTop(s.distance), cFuncCeil)(f.distance, s.distance, depthBuffer)
+            fillVertical(bi, x, wallTop(f.distance), wallTop(s.distance), cFuncCeil)(f.distance, s.distance, depthBuffer)
           }
         }
       }
@@ -149,21 +157,49 @@ class Render(
           Col.multiplyAdd(cAt, oAt, wallSide.colorMultiplier)
 
 
-        fillVertical(bi, x, wTop(hitResult.distance), wBot(hitResult.distance), cFunc)(hitResult.distance, hitResult.distance, depthBuffer)
+        fillVertical(bi, x, wallTop(hitResult.distance), wallBot(hitResult.distance), cFunc)(hitResult.distance, hitResult.distance, depthBuffer)
       }
 
     }
 
-    val ccd = new CountDownLatch(width)
-    val futs = for (x <-  0 until width) yield Future{
-      renderRay(x)
-      ccd.countDown()
+    def renderSprite(s: Sprite): Unit = {
+        val toSprite = s.position - game.position
+        if(game.lookDirection ** toSprite >= 0) {
+          val lpos = s.leftPos(game.lookDirection)
+          val toLpos = lpos - game.position
+          val toLAngle = game.lookDirection.angleCCW(toLpos)
+          val onScreenLeft = (toLAngle - params.fov / 2)/ (params.fov ) * (width )
+
+          val rpos = s.rightPos(game.lookDirection)
+          val toRpos = rpos - game.position
+          val toRAngle = game.lookDirection.angleCCW(toRpos)
+          val onScreenRight = (toRAngle - params.fov / 2) / (params.fov) * (width)
+
+          val bot = posAtDist(height, toSprite.length, toLAngle, s.bounds._1.y)
+          val top = posAtDist(height, toSprite.length, toRAngle, s.bounds._2.y)
+
+          bi.getGraphics.drawImage(s.tex, math.min(onScreenLeft, onScreenRight).toInt, bot.toInt, math.abs(onScreenLeft - onScreenRight).toInt, math.abs(bot - top).toInt, null)
+
+        }
     }
 
-    ccd.await()
     //с CountDownLatch на 2 FPS больше чем с
     // Await.result(Future.sequence(futs), Duration.Inf)
+    val ccdRays = new CountDownLatch(width)
+    val futs = for (x <- 0 until width) yield Future {
+      renderRay(x)
+      ccdRays.countDown()
+    }
+    ccdRays.await()
 
+
+    val sp = game.sprites
+    val ccdSprites = new CountDownLatch(sp.size)
+    for (s <- sp) yield Future {
+      renderSprite(s)
+      ccdSprites.countDown()
+    }
+    ccdSprites.await()
     bi
   }
 
